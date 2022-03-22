@@ -25,24 +25,6 @@ def restart_dnsmasq():
     subprocess.call("sudo service dnsmasq restart".split())
 
 
-def start_process(name):
-    try:
-        logger.info("Starting {} process - Thanks Jonas Karlsson!".format(name))
-        with open(os.devnull, 'wb') as devnull:
-            subprocess.check_call(["sudo", "service", name, "start"], stdout=devnull)
-    except (subprocess.CalledProcessError, IOError):
-        logging.warning("Unable to start the {} process".format(name))
-
-
-def stop_process(name):
-    try:
-        logger.info("Stopping {} process".format(name))
-        with open(os.devnull, 'wb') as devnull:
-            subprocess.check_call(["sudo", "service", name, "stop"], stdout=devnull)
-    except (subprocess.CalledProcessError, IOError):
-        logging.warning("Unable to stop the {} process".format(name))
-
-
 def get_default_iface_name_linux():
     route = "/proc/net/route"
     with open(route) as f:
@@ -505,18 +487,12 @@ def main():
         restart_dnsmasq()
 
         config_server.start()
-        start_process("dcvoip")
-        start_process("dcgamespy")
-        start_process("dc2k2")
+
         return process()
     except:
         logger.exception("Something went wrong...")
         return 1
     finally:
-        stop_process("dc2k2")
-        stop_process("dcgamespy")
-        stop_process("dcvoip")
-
         config_server.stop()
         logger.info("Dreampi quit successfully")
 

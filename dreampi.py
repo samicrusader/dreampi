@@ -20,7 +20,6 @@ from datetime import datetime, timedelta
 
 DNS_FILE = "https://dreamcast.online/dreampi/dreampi_dns.conf"
 
-
 logger = logging.getLogger('dreampi')
 
 

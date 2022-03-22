@@ -499,12 +499,8 @@ def main():
 
 if __name__ == '__main__':
     logger.setLevel(logging.INFO)
-    handler = logging.handlers.SysLogHandler(address='/dev/log')
-    logger.addHandler(handler)
-
-    if len(sys.argv) > 1 and "--no-daemon" in sys.argv:
-        logger.addHandler(logging.StreamHandler())
-        sys.exit(main())
+    logger.addHandler(logging.StreamHandler())
+    sys.exit(main())
 
     daemon = Daemon("/tmp/dreampi.pid", main)
 

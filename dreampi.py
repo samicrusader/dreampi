@@ -20,8 +20,33 @@ from datetime import datetime, timedelta
 logger = logging.getLogger('dreampi')
 
 
+def get_init_manager():
+    # TODO: figure out other init daemons but i swear people only use systemd, upstart and sysv
+    resp = subprocess.check_output(['/sbin/init', '--version'])
+    if b'systemd' in resp:
+        _service_start = 'systemctl start {service}'
+        _service_stop = 'systemctl stop {service}'
+        _service_restart = 'systemctl restart {service}'
+        return True
+    elif b'upstart' in resp:
+        _service_start = 'initctl start {service}'
+        _service_stop = 'initctl stop {service}'
+        _service_restart = 'initctl restart {service}'
+        return True
+    else:
+        if os.path.exists('/etc/init.d/cron'):
+            # SysV
+            # I pray the user keeps this the same.
+            _service_start = '/etc/init.d/{service} start'
+            _service_stop = '/etc/init.d/{service} stop'
+            _service_restart = '/etc/init.d/{service} restart'
+            return True
+        else:
+            raise Exception('Can\'t figure out init daemon. Please add yours and submit a PR.')
+
+
 def restart_dnsmasq():
-    subprocess.call("sudo service dnsmasq restart".split())
+    subprocess.call(_service_restart.format(service='dnsmasq').split())
 
 
 def get_default_iface_name_linux():

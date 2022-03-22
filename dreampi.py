@@ -12,7 +12,6 @@ import subprocess
 import sh
 import signal
 import re
-import config_server
 import urllib
 import urllib2
 import iptc
@@ -486,14 +485,11 @@ def main():
         # Just make sure everything is fine
         restart_dnsmasq()
 
-        config_server.start()
-
         return process()
     except:
         logger.exception("Something went wrong...")
         return 1
     finally:
-        config_server.stop()
         logger.info("Dreampi quit successfully")
 
 

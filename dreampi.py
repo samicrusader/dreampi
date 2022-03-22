@@ -18,8 +18,6 @@ import urllib2
 import iptc
 from datetime import datetime, timedelta
 
-DNS_FILE = "https://dreamcast.online/dreampi/dreampi_dns.conf"
-
 logger = logging.getLogger('dreampi')
 
 
@@ -52,27 +50,6 @@ def check_internet_connection():
 
 def restart_dnsmasq():
     subprocess.call("sudo service dnsmasq restart".split())
-
-
-def update_dns_file():
-    """
-        Download a DNS settings file for the DreamPi configuration (avoids forwarding requests to the main DNS server
-        and provides a backup if that ever goes down)
-    """
-    try:
-        response = urllib2.urlopen(DNS_FILE)
-        # Stop the server
-        subprocess.check_call("sudo service dnsmasq stop".split())
-
-        # Update the configuration
-        with open("/etc/dnsmasq.d/dreampi.conf", "w") as f:
-            f.write(response.read())
-
-        # Start the server again
-        subprocess.check_call("sudo service dnsmasq start".split())
-    except (urllib2.URLError, urllib2.HTTPError, IOError):
-        logging.exception("Unable to update the DNS file for some reason, will use upstream")
-        pass
 
 
 afo_patcher = None
@@ -599,9 +576,6 @@ def main():
         while not check_internet_connection():
             logger.info("Waiting for internet connection...")
             time.sleep(3)
-
-        # Try to update the DNS configuration
-        update_dns_file()
 
         # Hack around dodgy Raspberry Pi things
         enable_prom_mode_on_wlan0()

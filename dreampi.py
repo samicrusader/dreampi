@@ -16,9 +16,6 @@ import config_server
 import urllib
 import urllib2
 import iptc
-
-from port_forwarding import PortForwarding
-
 from datetime import datetime, timedelta
 
 DNS_FILE = "https://dreamcast.online/dreampi/dreampi_dns.conf"
@@ -522,13 +519,6 @@ def process():
 
     modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)
     dreamcast_ip = autoconfigure_ppp(modem.device_name, modem.device_speed)
-
-    # Get a port forwarding object, now that we know the DC IP.
-    # port_forwarding = PortForwarding(dreamcast_ip, logger)
-
-    # Disabled until we can figure out a faster way of doing this.. it takes a minute
-    # on my router which is way too long to wait for the DreamPi to boot
-    # port_forwarding.forward_all()
 
     mode = "LISTENING"
 

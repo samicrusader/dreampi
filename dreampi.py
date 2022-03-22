@@ -25,49 +25,6 @@ def restart_dnsmasq():
     subprocess.call("sudo service dnsmasq restart".split())
 
 
-afo_patcher = None
-
-
-def start_afo_patching():
-    global afo_patcher
-
-    def fetch_replacement_ip():
-        url = "http://dreamcast.online/afo.txt"
-        try:
-            return urllib.urlopen(url).read().strip()
-        except IOError:
-            return None
-
-    replacement = fetch_replacement_ip()
-
-    if not replacement:
-        logger.warning("Not starting AFO patch as couldn't get IP from server")
-        return
-
-    table = iptc.Table(iptc.Table.NAT)
-    chain = iptc.Chain(table, "PREROUTING")
-
-    rule = iptc.Rule()
-    rule.protocol = "tcp"
-    rule.dst = "63.251.242.131"
-    rule.create_target("DNAT")
-    rule.target.to_destination = replacement
-
-    chain.append_rule(rule)
-
-    afo_patcher = rule
-    logger.info("AFO routing enabled")
-
-
-def stop_afo_patching():
-    global afo_patcher
-    if afo_patcher:
-        table = iptc.Table(iptc.Table.NAT)
-        chain = iptc.Chain(table, "PREROUTING")
-        chain.delete_rule(afo_patcher)
-        logger.info("AFO routing disabled")
-
-
 def start_process(name):
     try:
         logger.info("Starting {} process - Thanks Jonas Karlsson!".format(name))
@@ -520,9 +477,6 @@ def process():
             modem.connect()
             if dial_tone_enabled:
                 modem.start_dial_tone()
-
-    # Temporarily disabled, see above
-    # port_forwarding.delete_all()
     return 0
 
 
@@ -551,7 +505,6 @@ def main():
         restart_dnsmasq()
 
         config_server.start()
-        start_afo_patching()
         start_process("dcvoip")
         start_process("dcgamespy")
         start_process("dc2k2")
@@ -563,7 +516,6 @@ def main():
         stop_process("dc2k2")
         stop_process("dcgamespy")
         stop_process("dcvoip")
-        stop_afo_patching()
 
         config_server.stop()
         logger.info("Dreampi quit successfully")

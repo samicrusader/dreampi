@@ -21,33 +21,6 @@ from datetime import datetime, timedelta
 logger = logging.getLogger('dreampi')
 
 
-def check_internet_connection():
-    """ Returns True if there's a connection """
-
-    IP_ADDRESS_LIST = [
-        "1.1.1.1",  # Cloudflare
-        "1.0.0.1",
-        "8.8.8.8",  # Google DNS
-        "8.8.4.4",
-        "208.67.222.222",  # Open DNS
-        "208.67.220.220"
-    ]
-
-    port = 53
-    timeout = 3
-
-    for host in IP_ADDRESS_LIST:
-        try:
-            socket.setdefaulttimeout(timeout)
-            socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
-            return True
-        except socket.error:
-            pass
-    else:
-        logger.exception("No internet connection")
-        return False
-
-
 def restart_dnsmasq():
     subprocess.call("sudo service dnsmasq restart".split())
 
@@ -479,7 +452,6 @@ def process():
     # we have a modem and internet connection
     while True:
         logger.info("Detecting connection and modem...")
-        internet_connected = check_internet_connection()
         device_and_speed = detect_device_and_speed()
 
         if internet_connected and device_and_speed:
@@ -572,11 +544,6 @@ def enable_prom_mode_on_wlan0():
 
 def main():
     try:
-        # Don't do anything until there is an internet connection
-        while not check_internet_connection():
-            logger.info("Waiting for internet connection...")
-            time.sleep(3)
-
         # Hack around dodgy Raspberry Pi things
         enable_prom_mode_on_wlan0()
 

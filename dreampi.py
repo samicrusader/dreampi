@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import atexit
 import serial
@@ -17,11 +17,9 @@ import urllib
 import urllib2
 import iptc
 
-from dcnow import DreamcastNowService
 from port_forwarding import PortForwarding
 
 from datetime import datetime, timedelta
-
 
 DNS_FILE = "https://dreamcast.online/dreampi/dreampi_dns.conf"
 
@@ -540,8 +538,6 @@ def process():
 
     time_digit_heard = None
 
-    dcnow = DreamcastNowService()
-
     while True:
         if killer.kill_now:
             break
@@ -574,16 +570,12 @@ def process():
                 mode = "CONNECTED"
 
         elif mode == "CONNECTED":
-            dcnow.go_online(dreamcast_ip)
-
             # We start watching /var/log/messages for the hang up message
             for line in sh.tail("-f", "/var/log/messages", "-n", "1", _iter=True):
                 if "Modem hangup" in line:
                     logger.info("Detected modem hang up, going back to listening")
                     time.sleep(5)  # Give the hangup some time
                     break
-
-            dcnow.go_offline()
 
             mode = "LISTENING"
             modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)

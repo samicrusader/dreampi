@@ -69,7 +69,7 @@ def autoconfigure_ppp(device, speed):
        to autoconfigure PPP as best it can by detecting the subnet and gateway
        we're running on.
 
-       Returns the IP allocated to the Dreamcast
+       Returns the IP allocated to the client.
     """
 
     gateway_ip = subprocess.check_output("route -n | grep 'UG[ \t]' | awk '{print $2}'", shell=True)
@@ -93,11 +93,11 @@ noccp
     this_ip = find_next_unused_ip(".".join(subnet) + ".100")
     dreamcast_ip = find_next_unused_ip(this_ip)
 
-    logger.info("Dreamcast IP: {}".format(dreamcast_ip))
+    logger.info("Client IP: {}".format(dreamcast_ip))
 
     peers_content = PEERS_TEMPLATE.format(device=device, device_speed=speed, this_ip=this_ip, dc_ip=dreamcast_ip)
 
-    with open("/etc/ppp/peers/dreamcast", "w") as f:
+    with open("/etc/ppp/peers/dreampi", "w") as f:
         f.write(peers_content)
 
     options_content = OPTIONS_TEMPLATE.format(this_ip)
@@ -309,7 +309,7 @@ class Modem(object):
         self.send_command("ATA", ignore_responses=["OK"])
         time.sleep(5)
         logger.info("Call answered!")
-        logger.info(subprocess.check_output(["pon", "dreamcast"]))
+        logger.info(subprocess.check_output(["pon", "dreampi"]))
         logger.info("Connected")
 
     def send_command(self, command, timeout=60, ignore_responses=None):

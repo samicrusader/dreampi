@@ -18,7 +18,10 @@ logger = logging.getLogger('dreampi')
 
 def get_init_manager():
     # TODO: figure out other init daemons but i swear people only use systemd, upstart and sysv
-    resp = subprocess.check_output(['/sbin/init', '--version'])
+    try:
+        resp = subprocess.check_output(['/sbin/init', '--version'])
+    except:
+        resp = bytes()
     if b'systemd' in resp:
         _service_start = 'systemctl start {service}'
         _service_stop = 'systemctl stop {service}'

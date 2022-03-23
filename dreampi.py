@@ -88,7 +88,7 @@ def find_next_unused_ip(start):
     raise Exception("Unable to find a free IP on the network")
 
 
-def autoconfigure_ppp(device, speed):
+def autoconfigure_ppp(device, speed, papauth: bool):
     """
        Every network is different, this function runs on boot and tries
        to autoconfigure PPP as best it can by detecting the subnet and gateway
@@ -100,20 +100,13 @@ def autoconfigure_ppp(device, speed):
     gateway_ip = subprocess.check_output("route -n | grep 'UG[ \t]' | awk '{print $2}'", shell=True)
     subnet = gateway_ip.split(".")[:3]
 
-    PEERS_TEMPLATE = """
-{device}
-{device_speed}
-{this_ip}:{dc_ip}
-noauth
-    """.strip()
+    PEERS_TEMPLATE = '{device}\n{device_speed}\n{this_ip}:{dc_ip}\n'.strip()
+    if not papauth:
+        PEERS_TEMPLATE += 'noauth\n'
 
-    OPTIONS_TEMPLATE = """
-debug
-ms-dns {}
-proxyarp
-ktune
-noccp
-    """.strip()
+    OPTIONS_TEMPLATE = 'debug\nms-dns {}\nproxyarp\nktune\nnoccp\n'
+    if not papauth:
+        OPTIONS_TEMPLATE += 'auth\nrequire-pap\n'
 
     this_ip = find_next_unused_ip(".".join(subnet) + ".100")
     dreamcast_ip = find_next_unused_ip(this_ip)
@@ -140,9 +133,7 @@ def detect_device_and_speed():
     MAX_SPEED = 57600
 
     if not ENABLE_SPEED_DETECTION:
-        # By default we don't detect the speed or device as it's flakey in later
-        # Pi kernels. But it might be necessary for some people so that functionality
-        # can be enabled by setting the flag above to True
+        # Pi kernels suck so you may want to disable speed detection.
         return ("ttyACM0", MAX_SPEED)
 
     command = ["wvdialconf", "/dev/null"]
@@ -404,6 +395,8 @@ def process():
     killer = GracefulKiller()
 
     dial_tone_enabled = "--disable-dial-tone" not in sys.argv
+
+    pap_auth_enable = '--enable-pap-auth' in sys.argv
 
     # Make sure pppd isn't running
     with open(os.devnull, 'wb') as devnull:

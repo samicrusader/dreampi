@@ -23,23 +23,14 @@ def get_init_manager():
     except:
         resp = bytes()
     if b'systemd' in resp:
-        _service_start = 'systemctl start {service}'
-        _service_stop = 'systemctl stop {service}'
-        _service_restart = 'systemctl restart {service}'
-        return True
+        return 'systemd'
     elif b'upstart' in resp:
-        _service_start = 'initctl start {service}'
-        _service_stop = 'initctl stop {service}'
-        _service_restart = 'initctl restart {service}'
-        return True
+        return 'upstart'
     else:
         if os.path.exists('/etc/init.d/cron'):
             # SysV
             # I pray the user keeps this the same.
-            _service_start = '/etc/init.d/{service} start'
-            _service_stop = '/etc/init.d/{service} stop'
-            _service_restart = '/etc/init.d/{service} restart'
-            return True
+            return 'sysv'
         else:
             raise Exception('Can\'t figure out init daemon. Please add yours and submit a PR.')
 
@@ -459,41 +450,50 @@ def process():
                 modem.answer()
                 modem.disconnect()
                 mode = "CONNECTED"
-
+            print('answering done')
         elif mode == "CONNECTED":
-            # We start watching /var/log/messages for the hang up message
-            for i in ['/var/log/messages', '/var/log/syslog']:
-                if os.path.exists(i):
-                    for line in sh.tail("-f", "/var/log/messages", "-n", "1", _iter=True):
-                        if "Modem hangup" in line:
-                            logger.info("Detected modem hang up, going back to listening")
-                            time.sleep(5)  # Give the hangup some time
+            print("connected")
+            runsystem = get_init_manager()
+            print(runsystem)
+            if runsystem == 'systemd':
+                print('in loop')
+                import select
+                from systemd import journal
+                j = journal.Reader()
+                j.this_boot()
+                j.this_machine()
+                j.seek_tail()
+                j.get_previous()
+                p = select.poll()
+                journal_fd = j.fileno()
+                poll_event_mask = j.get_events()
+                p.register(journal_fd, poll_event_mask)
+                print('suicide yet?')
+                while True:
+                    if p.poll(250):
+                        if j.process() == journal.APPEND:
+                            for entry in j:
+                                print('entry:', entry['MESSAGE'])
+                                if entry['MESSAGE'].find("Modem hangup") > -1:
+                                    print('nigga')
+                                    logger.info("Detected modem hang up, going back to listening")
+                                    time.sleep(5)  # Give the hangup some time
+                                    break
                             break
-                else:
-                    # TODO: more init daemons
-                    # Systemd
-                    import select
-                    from systemd import journal
-                    j = journal.Reader()
-                    j.this_boot()
-                    j.this_machine()
-                    j.seek_tail()
-                    j.get_previous()
-                    p = select.poll()
-                    journal_fd = j.fileno()
-                    poll_event_mask = j.get_events()
-                    p.register(journal_fd, poll_event_mask)
-                    while True:
-                        if p.poll(250):
-                            if j.process() == journal.APPEND:
-                                for entry in j:
-                                    if entry['MESSAGE'].find("Modem hangup") > -1:
-                                        logger.info("Detected modem hang up, going back to listening")
-                                        time.sleep(5)  # Give the hangup some time
-                                        break
-                                break
-
+            else:
+                # We start watching /var/log/messages for the hang up message
+                # for i in ['/var/log/messages', '/var/log/syslog']:
+                if os.path.exists('/var/log/messages'):
+                    syslogpath = '/var/log/messages'
+                elif os.path.exists('/var/log/syslog'):
+                    syslogpath = '/var/log/syslog'
+                for line in sh.tail("-f", syslogpath, "-n", "1", _iter=True):
+                    if "Modem hangup" in line:
+                        logger.info("Detected modem hang up, going back to listening")
+                        time.sleep(5)  # Give the hangup some time
+                        break
             mode = "LISTENING"
+            print('suicide')
             modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)
             modem.connect()
             if dial_tone_enabled:

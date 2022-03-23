@@ -44,10 +44,6 @@ def get_init_manager():
             raise Exception('Can\'t figure out init daemon. Please add yours and submit a PR.')
 
 
-def restart_dnsmasq():
-    subprocess.call(_service_restart.format(service='dnsmasq').split())
-
-
 def get_default_iface_name_linux():
     route = "/proc/net/route"
     with open(route) as f:
@@ -498,9 +494,6 @@ def main():
     try:
         # Hack around dodgy Raspberry Pi things
         enable_prom_mode_on_wlan0()
-
-        # Just make sure everything is fine
-        restart_dnsmasq()
 
         return process()
     except:

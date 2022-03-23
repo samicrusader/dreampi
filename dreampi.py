@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import atexit
 import serial
 import os
 import logging
@@ -112,7 +111,7 @@ def autoconfigure_ppp(device, speed, papauth: bool):
     return dreamcast_ip
 
 
-ENABLE_SPEED_DETECTION = False  # Set this to true if you want to use wvdialconf for device detection
+ENABLE_SPEED_DETECTION = True  # Set this to true if you want to use wvdialconf for device detection
 
 
 def detect_device_and_speed():
@@ -125,7 +124,7 @@ def detect_device_and_speed():
     command = ["wvdialconf", "/dev/null"]
 
     try:
-        output = subprocess.check_output(command, stderr=subprocess.STDOUT)
+        output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode()
 
         lines = output.split("\n")
 
@@ -133,7 +132,7 @@ def detect_device_and_speed():
             match = re.match("(.+)\<Info\>\:\sSpeed\s(\d+);", line.strip())
             if match:
                 device = match.group(1)
-                speed = match.group(2)
+                speed = int(match.group(2))
                 logger.info("Detected device {} with speed {}".format(device, speed))
 
                 # Many modems report speeds higher than they can handle so we cap
@@ -145,84 +144,6 @@ def detect_device_and_speed():
     except:
         logger.exception("Unable to detect modem. Falling back to ttyACM0")
     return ("ttyACM0", MAX_SPEED)
-
-
-class Daemon(object):
-    def __init__(self, pidfile, process):
-        self.pidfile = pidfile
-        self.process = process
-
-    def daemonize(self):
-        try:
-            pid = os.fork()
-            if pid > 0:
-                sys.exit(0)
-
-        except OSError:
-            sys.exit(1)
-
-        os.chdir("/")
-        os.setsid()
-        os.umask(0)
-
-        try:
-            pid = os.fork()
-            if pid > 0:
-                sys.exit(0)
-        except OSError:
-            sys.exit(1)
-
-        atexit.register(self.delete_pid)
-        pid = str(os.getpid())
-        with open(self.pidfile, 'w+') as f:
-            f.write("%s\n" % pid)
-
-    def delete_pid(self):
-        os.remove(self.pidfile)
-
-    def _read_pid_from_pidfile(self):
-        try:
-            with open(self.pidfile, 'r') as pf:
-                pid = int(pf.read().strip())
-        except IOError:
-            pid = None
-        return pid
-
-    def start(self):
-        pid = self._read_pid_from_pidfile()
-
-        if pid:
-            logger.info("Daemon already running, exiting")
-            sys.exit(1)
-
-        logger.info("Starting daemon")
-        self.daemonize()
-        self.run()
-
-    def stop(self):
-        pid = self._read_pid_from_pidfile()
-
-        if not pid:
-            logger.info("pidfile doesn't exist, deamon must not be running")
-            return
-
-        try:
-            while True:
-                os.kill(pid, signal.SIGTERM)
-                time.sleep(0.1)
-
-        except OSError:
-            if os.path.exists(self.pidfile):
-                os.remove(self.pidfile)
-            else:
-                sys.exit(1)
-
-    def restart(self):
-        self.stop()
-        self.start()
-
-    def run(self):
-        self.process()
 
 
 class Modem(object):
@@ -516,7 +437,6 @@ def main():
     try:
         # Hack around dodgy Raspberry Pi things
         enable_prom_mode_on_wlan0()
-
         return process()
     except:
         logger.exception("Something went wrong...")
@@ -528,19 +448,3 @@ def main():
 if __name__ == '__main__':
     logger.setLevel(logging.DEBUG)
     sys.exit(main())
-
-    daemon = Daemon("/tmp/dreampi.pid", main)
-
-    if len(sys.argv) == 2:
-        if sys.argv[1] == "start":
-            daemon.start()
-        elif sys.argv[1] == "stop":
-            daemon.stop()
-        elif sys.argv[1] == "restart":
-            daemon.restart()
-        else:
-            sys.exit(2)
-        sys.exit(0)
-    else:
-        print("Usage: %s start|stop|restart" % sys.argv[0])
-        sys.exit(2)

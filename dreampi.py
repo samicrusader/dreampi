@@ -450,13 +450,9 @@ def process():
                 modem.answer()
                 modem.disconnect()
                 mode = "CONNECTED"
-            print('answering done')
         elif mode == "CONNECTED":
-            print("connected")
             runsystem = get_init_manager()
-            print(runsystem)
             if runsystem == 'systemd':
-                print('in loop')
                 import select
                 from systemd import journal
                 j = journal.Reader()
@@ -468,18 +464,18 @@ def process():
                 journal_fd = j.fileno()
                 poll_event_mask = j.get_events()
                 p.register(journal_fd, poll_event_mask)
-                print('suicide yet?')
+                zbreak = False
                 while True:
-                    if p.poll(250):
+                    if p.poll(1):
                         if j.process() == journal.APPEND:
                             for entry in j:
-                                print('entry:', entry['MESSAGE'])
                                 if entry['MESSAGE'].find("Modem hangup") > -1:
-                                    print('nigga')
                                     logger.info("Detected modem hang up, going back to listening")
                                     time.sleep(5)  # Give the hangup some time
+                                    zbreak = True
                                     break
-                            break
+                            if zbreak:
+                                break
             else:
                 # We start watching /var/log/messages for the hang up message
                 # for i in ['/var/log/messages', '/var/log/syslog']:
@@ -493,7 +489,6 @@ def process():
                         time.sleep(5)  # Give the hangup some time
                         break
             mode = "LISTENING"
-            print('suicide')
             modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)
             modem.connect()
             if dial_tone_enabled:

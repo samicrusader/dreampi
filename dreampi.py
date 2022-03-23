@@ -61,10 +61,10 @@ def ip_exists(ip, iface):
     command = ["arp", "-a", "-i", iface]
     output = subprocess.check_output(command).decode()
     if ("(%s)" % ip) in output:
-        logger.info("IP existed at %s", ip)
+        logger.debug("IP existed at %s", ip)
         return True
     else:
-        logger.info("Free IP at %s", ip)
+        logger.debug("Free IP at %s", ip)
         return False
 
 
@@ -95,7 +95,7 @@ def autoconfigure_ppp(device, speed, papauth: bool):
     gateway_ip = subprocess.check_output("route -n | grep 'UG[ \t]' | awk '{print $2}'", shell=True).decode()
     subnet = gateway_ip.split(".")[:3]
 
-    PEERS_TEMPLATE = '{device}\n{device_speed}\n{this_ip}:{dc_ip}\n'.strip()
+    PEERS_TEMPLATE = '{device}\n{device_speed}\n{this_ip}:{dc_ip}\n'
     if not papauth:
         PEERS_TEMPLATE += 'noauth\n'
 
@@ -307,7 +307,7 @@ class Modem(object):
         if not self._sending_tone:
             return
 
-        self._serial.write("\0{}{}\r\n".format(chr(0x10), chr(0x03)))
+        self._serial.write(("\0{}{}\r\n".format(chr(0x10), chr(0x03))).encode())
         self.send_escape()
         self.send_command("ATH0")  # Go on-hook
         self.reset()  # Reset the modem
@@ -320,7 +320,7 @@ class Modem(object):
         self.send_command("ATA", ignore_responses=["OK"])
         time.sleep(5)
         logger.info("Call answered!")
-        logger.info(subprocess.check_output(["pon", "dreampi"]))
+        pon = subprocess.check_output(["pon", "dreampi"])
         logger.info("Connected")
 
     def send_command(self, command, timeout=60, ignore_responses=None):
@@ -329,11 +329,14 @@ class Modem(object):
         VALID_RESPONSES = [b"OK", b"ERROR", b"CONNECT", b"VCON"]
 
         for ignore in ignore_responses:
-            VALID_RESPONSES.remove(ignore)
+            try:
+                VALID_RESPONSES.remove(ignore.encode())
+            except ValueError:
+                pass
 
         final_command = "%s\r\n" % command
         self._serial.write(final_command.encode())
-        logger.info(final_command)
+        logger.debug(final_command.strip())
 
         start = datetime.now()
 
@@ -346,8 +349,10 @@ class Modem(object):
 
             line = line + new_data
             for resp in VALID_RESPONSES:
+                if resp == b'CONNECT' and command == 'AT+VTX':
+                    logger.info('Modem is listening.')
                 if resp in line:
-                    logger.info(line[line.find(resp):])
+                    logger.debug((line[line.find(resp):]).decode())
                     return  # We are done
 
             if (datetime.now() - start).total_seconds() > timeout:
@@ -355,7 +360,7 @@ class Modem(object):
 
     def send_escape(self):
         time.sleep(1.0)
-        self._serial.write("+++")
+        self._serial.write(b"+++")
         time.sleep(1.0)
 
     def update(self):
@@ -501,7 +506,7 @@ def main():
 
 
 if __name__ == '__main__':
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     sys.exit(main())
 
     daemon = Daemon("/tmp/dreampi.pid", main)

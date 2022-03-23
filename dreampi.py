@@ -59,7 +59,7 @@ def get_default_iface_name_linux():
 
 def ip_exists(ip, iface):
     command = ["arp", "-a", "-i", iface]
-    output = subprocess.check_output(command)
+    output = subprocess.check_output(command).decode()
     if ("(%s)" % ip) in output:
         logger.info("IP existed at %s", ip)
         return True
@@ -92,7 +92,7 @@ def autoconfigure_ppp(device, speed, papauth: bool):
        Returns the IP allocated to the client.
     """
 
-    gateway_ip = subprocess.check_output("route -n | grep 'UG[ \t]' | awk '{print $2}'", shell=True)
+    gateway_ip = subprocess.check_output("route -n | grep 'UG[ \t]' | awk '{print $2}'", shell=True).decode()
     subnet = gateway_ip.split(".")[:3]
 
     PEERS_TEMPLATE = '{device}\n{device_speed}\n{this_ip}:{dc_ip}\n'.strip()
@@ -326,18 +326,18 @@ class Modem(object):
     def send_command(self, command, timeout=60, ignore_responses=None):
         ignore_responses = ignore_responses or []  # Things to completely ignore
 
-        VALID_RESPONSES = ["OK", "ERROR", "CONNECT", "VCON"]
+        VALID_RESPONSES = [b"OK", b"ERROR", b"CONNECT", b"VCON"]
 
         for ignore in ignore_responses:
             VALID_RESPONSES.remove(ignore)
 
         final_command = "%s\r\n" % command
-        self._serial.write(final_command)
+        self._serial.write(final_command.encode())
         logger.info(final_command)
 
         start = datetime.now()
 
-        line = ""
+        line = bytes()
         while True:
             new_data = self._serial.readline().strip()
 
@@ -405,19 +405,16 @@ def process():
         logger.info("Detecting connection and modem...")
         device_and_speed = detect_device_and_speed()
 
-        if internet_connected and device_and_speed:
-            logger.info("Internet connected and device found!")
+        if device_and_speed:
+            logger.info("Modem found!")
             break
-
-        elif not internet_connected:
-            logger.warn("Unable to detect an internet connection. Waiting...")
         elif not device_and_speed:
             logger.warn("Unable to find a modem device. Waiting...")
 
         time.sleep(5)
 
     modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)
-    dreamcast_ip = autoconfigure_ppp(modem.device_name, modem.device_speed)
+    dreamcast_ip = autoconfigure_ppp(modem.device_name, modem.device_speed, pap_auth_enable)
 
     mode = "LISTENING"
 
@@ -505,7 +502,6 @@ def main():
 
 if __name__ == '__main__':
     logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
     sys.exit(main())
 
     daemon = Daemon("/tmp/dreampi.pid", main)

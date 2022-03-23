@@ -462,11 +462,36 @@ def process():
 
         elif mode == "CONNECTED":
             # We start watching /var/log/messages for the hang up message
-            for line in sh.tail("-f", "/var/log/messages", "-n", "1", _iter=True):
-                if "Modem hangup" in line:
-                    logger.info("Detected modem hang up, going back to listening")
-                    time.sleep(5)  # Give the hangup some time
-                    break
+            for i in ['/var/log/messages', '/var/log/syslog']:
+                if os.path.exists(i):
+                    for line in sh.tail("-f", "/var/log/messages", "-n", "1", _iter=True):
+                        if "Modem hangup" in line:
+                            logger.info("Detected modem hang up, going back to listening")
+                            time.sleep(5)  # Give the hangup some time
+                            break
+                else:
+                    # TODO: more init daemons
+                    # Systemd
+                    import select
+                    from systemd import journal
+                    j = journal.Reader()
+                    j.this_boot()
+                    j.this_machine()
+                    j.seek_tail()
+                    j.get_previous()
+                    p = select.poll()
+                    journal_fd = j.fileno()
+                    poll_event_mask = j.get_events()
+                    p.register(journal_fd, poll_event_mask)
+                    while True:
+                        if p.poll(250):
+                            if j.process() == journal.APPEND:
+                                for entry in j:
+                                    if entry['MESSAGE'].find("Modem hangup") > -1:
+                                        logger.info("Detected modem hang up, going back to listening")
+                                        time.sleep(5)  # Give the hangup some time
+                                        break
+                                break
 
             mode = "LISTENING"
             modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)

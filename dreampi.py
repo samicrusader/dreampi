@@ -2,7 +2,6 @@
 
 import atexit
 import serial
-import socket
 import os
 import logging
 import logging.handlers
@@ -12,9 +11,6 @@ import subprocess
 import sh
 import signal
 import re
-import urllib
-import urllib2
-import iptc
 from datetime import datetime, timedelta
 
 logger = logging.getLogger('dreampi')

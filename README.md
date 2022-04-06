@@ -10,7 +10,7 @@ A daemon that creates a bridge between a Dreamcast's Dial-up Modem, and the Inte
 
 * You need a Linux distribution with either systemd, or your syslog output to `/var/log/messages` OR `/var/log/syslog`.
 * Preferrably a Conexant RD02-D400 modem. Any modem will work however, as long as it is recognizable by the Linux kernel that you are running.
-* If it is not already installed, install pppd.
+* If it is not already installed, install pppd, wvdial, and whatever package provides /sbin/route (or /bin/route), usually net-tools.
 * Install Python 3.6+ from your package manager.
 * Install these packages: `pyserial`, and `sh`.
   * Arch Linux users should install `python-pyserial`, and `python-sh`

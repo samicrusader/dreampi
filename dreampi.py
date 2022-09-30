@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import serial
 import os
 import logging
@@ -7,12 +8,15 @@ import logging.handlers
 import sys
 import time
 import subprocess
-import sh
 import signal
 import re
+import psutil
 from datetime import datetime, timedelta
 
-logger = logging.getLogger('dreampi')
+logger = logging.getLogger('notdreamnorpi')
+
+print('notdreamnorpi\nhttps://github.com/samicrusader/notdreamnorpi\nFork of Kazade\'s original DreamPi:',
+      'https://github.com/Kazade/dreampi\n--')
 
 
 def find_next_unused_ip(start, end: int = 1):
@@ -268,18 +272,25 @@ class GracefulKiller(object):
         self.kill_now = True
 
 
-def process():
+def main():
     killer = GracefulKiller()
 
-    dial_tone_enabled = "--disable-dial-tone" not in sys.argv
-
-    pap_auth_enable = '--enable-pap-auth' in sys.argv
-
     # Make sure pppd isn't running
-    with open(os.devnull, 'wb') as devnull:
-        subprocess.call(["sudo", "killall", "pppd"], stderr=devnull)
-
-    device_and_speed, internet_connected = None, False
+    logging.info('Killing pppd if running...')
+    for proc in psutil.process_iter():
+        try:
+            if 'pppd' in proc.name().lower():
+                logging.info(f'Killing pppd (pid {proc.pid})...')
+                proc.send_signal(9)  # SIGKILL
+        except psutil.ZombieProcess:
+            logging.error(f'pppd (pid {proc.pid}) is currently in a zombie state. There is likely locking IO'
+                          'somewhere. You may need to restart your system.')
+            return 1
+        except psutil.NoSuchProcess:
+            pass
+        except (Exception, psutil.AccessDenied) as e:
+            logging.error(f'Cannot kill pppd (pid {proc.pid}): {e}')
+            return 1
 
     # Startup checks, make sure that we don't do anything until
     # we have a modem and internet connection
@@ -295,13 +306,14 @@ def process():
 
         time.sleep(5)
 
-    modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)
-    cmdline, client_ip = autoconfigure_ppp(modem.device_name, modem.device_speed, pap_auth_enable)
+    modem = Modem(device_and_speed[0], device_and_speed[1], args.enable_dial_tone)
+    cmdline, client_ip = autoconfigure_ppp(modem.device_name, modem.device_speed, args.enable_pap_auth,
+                                           args.enable_pppd_debug)
 
     mode = "LISTENING"
 
     modem.connect()
-    if dial_tone_enabled:
+    if args.enable_dial_tone:
         modem.start_dial_tone()
 
     time_digit_heard = datetime.now()
@@ -350,39 +362,27 @@ def process():
             mode = 'LISTENING'
             modem.connect()
             modem.reset()
-            if dial_tone_enabled:
+            if args.enable_dial_tone:
                 modem.start_dial_tone()
     return 0
 
 
-def enable_prom_mode_on_wlan0():
-    """
-        The Pi wifi firmware seems broken, we can only get it to work by enabling
-        promiscuous mode.
-
-        This is a hack, we just enable it for wlan0 and ignore errors
-    """
-
-    try:
-        subprocess.check_call("sudo ifconfig wlan0 promisc".split())
-        logging.info("Promiscuous mode set on wlan0")
-    except subprocess.CalledProcessError:
-        logging.info("Attempted to set promiscuous mode on wlan0 but was unsuccessful")
-        logging.info("Probably no wifi connected, or using a different device name")
-
-
-def main():
-    try:
-        # Hack around dodgy Raspberry Pi things
-        enable_prom_mode_on_wlan0()
-        return process()
-    except:
-        logger.exception("Something went wrong...")
-        return 1
-    finally:
-        logger.info("Dreampi quit successfully")
-
-
 if __name__ == '__main__':
-    logger.setLevel(logging.DEBUG)
-    sys.exit(main())
+    # ArgumentParser setup
+    parser = argparse.ArgumentParser(
+        description='notdreamnorpi: hacky pppd wrapper for the masses',
+        prog='python3 dreampi.py'
+    )
+    parser.add_argument('--enable-dial-tone', '-d', type='bool', default=True,
+                        help='Enable simulated dial tone (default on)')
+    parser.add_argument('--enable-pap-auth', '-a', action='store_true',
+                        default=False, help='Enable PAP auth in pppd (default off)')
+    parser.add_argument('--enable-pppd-debug', action='store_true', default=False,
+                        help='Enable pppd debug messages (sent to stdout)')
+    parser.add_argument('--verbose', '-v', action='count', default=2,
+                        help='Increase verbosity (use like -vv, max level is around 3)')
+
+    args = parser.parse_args()
+    logger.setLevel(args.verbose*10)  # FIXME: Log levels are not right
+
+    quit(main())

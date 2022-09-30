@@ -74,7 +74,7 @@ def find_next_unused_ip(start, end: int = 1):
         raise Exception('Unable to find a free IP on the network')
 
 
-def autoconfigure_ppp(device, speed, papauth: bool):
+def autoconfigure_ppp(device, speed, pap_auth: bool, pppd_debug: bool):
     """
        Every network is different, this function runs on boot and tries
        to autoconfigure PPP as best it can by detecting the subnet and gateway
@@ -86,31 +86,22 @@ def autoconfigure_ppp(device, speed, papauth: bool):
     gateway_ip = subprocess.check_output("route -n | grep 'UG[ \t]' | awk '{print $2}'", shell=True).decode()
     subnet = gateway_ip.split(".")[:3]
 
-    PEERS_TEMPLATE = '{device}\n{device_speed}\n{this_ip}:{dc_ip}\n'
-    if not papauth:
-        PEERS_TEMPLATE += 'noauth\n'
+    host_ip, client_ip = find_next_unused_ip(".".join(subnet) + ".100", 2)
+    logger.info(f'Using host IP address: {host_ip}')
+    logger.info(f'Using client IP address: {client_ip}')
 
-    OPTIONS_TEMPLATE = 'debug\nms-dns {}\nproxyarp\nktune\nnoccp\n'
-    if not papauth:
-        OPTIONS_TEMPLATE += 'auth\nrequire-pap\n'
+    # Using quad9.net for DNS. This will be a user changeable option in the future.
+    cmdline = f'/usr/sbin/pppd /dev/{device} {speed} {host_ip}:{client_ip} nodetach ms-dns 9.9.9.9 proxyarp ktune noccp'
 
-    this_ip, dreamcast_ip = find_next_unused_ip(".".join(subnet) + ".100", 2)
-    logger.info(f'Using host IP address: {this_ip}')
-    logger.info(f'Using client IP address: {dreamcast_ip}')
+    if pppd_debug:
+        cmdline += ' logfile /dev/stderr debug'
 
-    logger.info("Client IP: {}".format(dreamcast_ip))
+    if not pap_auth:
+        cmdline += ' noauth'
+    else:
+        cmdline += ' auth require-pap'
 
-    peers_content = PEERS_TEMPLATE.format(device=device, device_speed=speed, this_ip=this_ip, dc_ip=dreamcast_ip)
-
-    with open("/etc/ppp/peers/dreampi", "w") as f:
-        f.write(peers_content)
-
-    options_content = OPTIONS_TEMPLATE.format(this_ip)
-
-    with open("/etc/ppp/options", "w") as f:
-        f.write(options_content)
-
-    return dreamcast_ip
+    return cmdline, client_ip
 
 
 ENABLE_SPEED_DETECTION = True  # Set this to true if you want to use wvdialconf for device detection

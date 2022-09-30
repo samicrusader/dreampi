@@ -34,43 +34,44 @@ def get_init_manager():
             raise Exception('Can\'t figure out init daemon. Please add yours and submit a PR.')
 
 
-def get_default_iface_name_linux():
-    route = "/proc/net/route"
-    with open(route) as f:
+def find_next_unused_ip(start, end: int = 1):
+    logger.debug('Finding active network interface...')
+    interface = None
+    with open('/proc/net/route') as f:
         for line in f.readlines():
-            try:
-                iface, dest, _, flags, _, _, _, _, _, _, _, =  line.strip().split()
-                if dest != '00000000' or not int(flags, 16) & 2:
-                    continue
-                return iface
-            except:
+            iface, dest, _, flags, _, _, _, _, _, _, _, = line.strip().split()
+            if dest != '00000000' or not int(flags, 16) & 2:
                 continue
+            logger.info(f'Network interface found: {iface}')
+            interface = iface
 
-
-def ip_exists(ip, iface):
-    command = ["arp", "-a", "-i", iface]
-    output = subprocess.check_output(command).decode()
-    if ("(%s)" % ip) in output:
-        logger.debug("IP existed at %s", ip)
-        return True
-    else:
-        logger.debug("Free IP at %s", ip)
-        return False
-
-
-def find_next_unused_ip(start):
-    interface = get_default_iface_name_linux()
+    if not interface:
+        raise Exception('No active network interfaces were found')
 
     parts = [int(x) for x in start.split(".")]
     current_check = parts[-1] - 1
 
-    while current_check:
-        test_ip = ".".join([str(x) for x in parts[:3] + [current_check]])
-        if not ip_exists(test_ip, interface):
-            return test_ip
-        current_check -= 1
+    logger.debug('Finding an unused IP address...')
+    output = subprocess.check_output(["arp", "-a", "-i", interface]).decode()
 
-    raise Exception("Unable to find a free IP on the network")
+    addresses = tuple()
+
+    for i in range(end):
+        while True:
+            test_ip = ".".join([str(x) for x in parts[:3] + [current_check]])
+            current_check -= 1
+            if test_ip not in addresses and (f'({test_ip})' not in output or f'({test_ip}) at <incomplete>' in output):
+                logger.debug(f'Returning IP address: {test_ip}')
+                addresses += (test_ip,)
+                break
+
+    if not len(addresses) == 0:
+        if len(addresses) == 1:
+            return addresses[0]
+        else:
+            return addresses
+    else:
+        raise Exception('Unable to find a free IP on the network')
 
 
 def autoconfigure_ppp(device, speed, papauth: bool):
@@ -93,8 +94,9 @@ def autoconfigure_ppp(device, speed, papauth: bool):
     if not papauth:
         OPTIONS_TEMPLATE += 'auth\nrequire-pap\n'
 
-    this_ip = find_next_unused_ip(".".join(subnet) + ".100")
-    dreamcast_ip = find_next_unused_ip(this_ip)
+    this_ip, dreamcast_ip = find_next_unused_ip(".".join(subnet) + ".100", 2)
+    logger.info(f'Using host IP address: {this_ip}')
+    logger.info(f'Using client IP address: {dreamcast_ip}')
 
     logger.info("Client IP: {}".format(dreamcast_ip))
 

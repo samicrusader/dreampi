@@ -137,7 +137,7 @@ class Modem(object):
     @staticmethod
     def _read_dial_tone():
         this_dir = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
-        dial_tone_wav = os.path.join(this_dir, "dial-tone.wav")
+        dial_tone_wav = os.path.join(this_dir, 'dial-tone.wav')
 
         with open(dial_tone_wav, "rb") as f:
             dial_tone = f.read()  # Read the entire wav file
@@ -177,7 +177,7 @@ class Modem(object):
         self._sending_tone = True
 
         self._time_since_last_dial_tone = (
-            datetime.now() - timedelta(seconds=100)
+                datetime.now() - timedelta(seconds=100)
         )
 
         self._dial_tone_counter = 0
@@ -205,7 +205,7 @@ class Modem(object):
 
         final_command = "%s\r\n" % command
         self._serial.write(final_command.encode())
-        logger.debug(final_command.strip())
+        logger.debug(f'Sending {final_command.strip()} to the modem')
 
         start = datetime.now()
 
@@ -241,7 +241,7 @@ class Modem(object):
 
             milliseconds = (now - self._time_since_last_dial_tone).microseconds * 1000
             if not self._time_since_last_dial_tone or milliseconds >= TIME_BETWEEN_UPLOADS_MS:
-                byte = self._dial_tone_wav[self._dial_tone_counter:self._dial_tone_counter+BUFFER_LENGTH]
+                byte = self._dial_tone_wav[self._dial_tone_counter:self._dial_tone_counter + BUFFER_LENGTH]
                 self._dial_tone_counter += BUFFER_LENGTH
                 if self._dial_tone_counter >= len(self._dial_tone_wav):
                     self._dial_tone_counter = 0
@@ -255,7 +255,7 @@ class GracefulKiller(object):
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
-    def exit_gracefully(self, signum, frame):
+    def exit_gracefully(self, signum, _):
         logging.warning("Received signal: %s", signum)
         self.kill_now = True
 
@@ -283,14 +283,14 @@ def main():
     # Startup checks, make sure that we don't do anything until
     # we have a modem and internet connection
     while True:
-        logger.info("Detecting connection and modem...")
+        logger.info('Detecting connection and modem...')
         device_and_speed = detect_device_and_speed()
 
         if device_and_speed:
-            logger.info("Modem found!")
+            logger.info('Modem found!')
             break
         elif not device_and_speed:
-            logger.warn("Unable to find a modem device. Waiting...")
+            logger.warning('Unable to find a modem device. Waiting...')
 
         time.sleep(5)
 
@@ -298,7 +298,7 @@ def main():
     cmdline, client_ip = autoconfigure_ppp(modem.device_name, modem.device_speed, args.enable_pap_auth,
                                            args.enable_pppd_debug)
 
-    mode = "LISTENING"
+    mode = 'LISTENING'
 
     modem.connect()
     if args.enable_dial_tone:
@@ -312,7 +312,7 @@ def main():
 
         now = datetime.now()
 
-        if mode == "LISTENING":
+        if mode == 'LISTENING':
             modem.update()
             char = modem._serial.read(1).strip()
             if not char:
@@ -323,9 +323,9 @@ def main():
                 try:
                     char = modem._serial.read(1)
                     digit = int(char)
-                    logger.info("Heard: %s", digit)
+                    logger.info('Heard: %s', digit)
 
-                    mode = "ANSWERING"
+                    mode = 'ANSWERING'
                     modem.stop_dial_tone()
                     time_digit_heard = now
                 except (TypeError, ValueError):
@@ -371,6 +371,6 @@ if __name__ == '__main__':
                         help='Increase verbosity (use like -vv, max level is around 3)')
 
     args = parser.parse_args()
-    logger.setLevel(args.verbose*10)  # FIXME: Log levels are not right
+    logger.setLevel(args.verbose * 10)  # FIXME: Log levels are not right
 
     quit(main())

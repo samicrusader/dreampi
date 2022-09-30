@@ -15,25 +15,6 @@ from datetime import datetime, timedelta
 logger = logging.getLogger('dreampi')
 
 
-def get_init_manager():
-    # TODO: figure out other init daemons but i swear people only use systemd, upstart and sysv
-    try:
-        resp = subprocess.check_output(['/sbin/init', '--version'])
-    except:
-        resp = bytes()
-    if b'systemd' in resp:
-        return 'systemd'
-    elif b'upstart' in resp:
-        return 'upstart'
-    else:
-        if os.path.exists('/etc/init.d/cron'):
-            # SysV
-            # I pray the user keeps this the same.
-            return 'sysv'
-        else:
-            raise Exception('Can\'t figure out init daemon. Please add yours and submit a PR.')
-
-
 def find_next_unused_ip(start, end: int = 1):
     logger.debug('Finding active network interface...')
     interface = None
@@ -161,7 +142,8 @@ class Modem(object):
     def device_name(self):
         return self._device
 
-    def _read_dial_tone(self):
+    @staticmethod
+    def _read_dial_tone():
         this_dir = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
         dial_tone_wav = os.path.join(this_dir, "dial-tone.wav")
 
@@ -217,16 +199,6 @@ class Modem(object):
         self.send_command("ATH0")  # Go on-hook
         self.reset()  # Reset the modem
         self._sending_tone = False
-
-    def answer(self):
-        self.reset()
-        # When we send ATA we only want to look for CONNECT. Some modems respond OK then CONNECT
-        # and that messes everything up
-        self.send_command("ATA", ignore_responses=["OK"])
-        time.sleep(5)
-        logger.info("Call answered!")
-        pon = subprocess.check_output(["pon", "dreampi"])
-        logger.info("Connected")
 
     def send_command(self, command, timeout=60, ignore_responses=None):
         ignore_responses = ignore_responses or []  # Things to completely ignore
@@ -324,7 +296,7 @@ def process():
         time.sleep(5)
 
     modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)
-    dreamcast_ip = autoconfigure_ppp(modem.device_name, modem.device_speed, pap_auth_enable)
+    cmdline, client_ip = autoconfigure_ppp(modem.device_name, modem.device_speed, pap_auth_enable)
 
     mode = "LISTENING"
 
@@ -332,7 +304,7 @@ def process():
     if dial_tone_enabled:
         modem.start_dial_tone()
 
-    time_digit_heard = None
+    time_digit_heard = datetime.now()
 
     while True:
         if killer.kill_now:
@@ -358,53 +330,26 @@ def process():
                     time_digit_heard = now
                 except (TypeError, ValueError):
                     pass
-        elif mode == "ANSWERING":
+        elif mode == 'ANSWERING':
             if (now - time_digit_heard).total_seconds() > 8.0:
                 time_digit_heard = None
-                modem.answer()
-                modem.disconnect()
-                mode = "CONNECTED"
-        elif mode == "CONNECTED":
-            runsystem = get_init_manager()
-            if runsystem == 'systemd':
-                import select
-                from systemd import journal
-                j = journal.Reader()
-                j.this_boot()
-                j.this_machine()
-                j.seek_tail()
-                j.get_previous()
-                p = select.poll()
-                journal_fd = j.fileno()
-                poll_event_mask = j.get_events()
-                p.register(journal_fd, poll_event_mask)
-                zbreak = False
-                while True:
-                    if p.poll(1):
-                        if j.process() == journal.APPEND:
-                            for entry in j:
-                                if entry['MESSAGE'].find("Modem hangup") > -1:
-                                    logger.info("Detected modem hang up, going back to listening")
-                                    time.sleep(5)  # Give the hangup some time
-                                    zbreak = True
-                                    break
-                            if zbreak:
-                                break
-            else:
-                # We start watching /var/log/messages for the hang up message
-                # for i in ['/var/log/messages', '/var/log/syslog']:
-                if os.path.exists('/var/log/messages'):
-                    syslogpath = '/var/log/messages'
-                elif os.path.exists('/var/log/syslog'):
-                    syslogpath = '/var/log/syslog'
-                for line in sh.tail("-f", syslogpath, "-n", "1", _iter=True):
-                    if "Modem hangup" in line:
-                        logger.info("Detected modem hang up, going back to listening")
-                        time.sleep(5)  # Give the hangup some time
-                        break
-            mode = "LISTENING"
-            modem = Modem(device_and_speed[0], device_and_speed[1], dial_tone_enabled)
+                modem.reset()
+                modem.send_command('ATA', ignore_responses=['OK'])
+                time.sleep(5)
+                logger.info('Call was answered.')
+                mode = 'CONNECTED'
+        elif mode == 'CONNECTED':
+            modem.disconnect()
+            pppd = subprocess.Popen(cmdline.split(' '), stderr=sys.stderr)
+            try:
+                pppd.wait()
+            except KeyboardInterrupt:
+                pppd.send_signal(9)  # SIGKILL
+                quit(0)
+            print('return code:', str(pppd.returncode))
+            mode = 'LISTENING'
             modem.connect()
+            modem.reset()
             if dial_tone_enabled:
                 modem.start_dial_tone()
     return 0

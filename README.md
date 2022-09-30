@@ -2,7 +2,7 @@
 
 Hacky `pppd` wrapper for the masses.
 
-This is a fork of the [DreamPi](https://github.com/Kazade/dreampi) project, updated to port the script to the modern era.
+This is a fork of the [DreamPi](https://github.com/Kazade/dreampi) project, updated to port the script to the modern era and to remove the Dreamcast-specific components. (You can still use this with your Dreamcast though!, with some limitations)
 
 ### Original description
 

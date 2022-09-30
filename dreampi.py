@@ -89,39 +89,27 @@ def autoconfigure_ppp(device, speed, pap_auth: bool, pppd_debug: bool):
     return cmdline, client_ip
 
 
-ENABLE_SPEED_DETECTION = True  # Set this to true if you want to use wvdialconf for device detection
-
-
 def detect_device_and_speed():
-    MAX_SPEED = 57600
-
-    if not ENABLE_SPEED_DETECTION:
-        # Pi kernels suck so you may want to disable speed detection.
-        return ("ttyACM0", MAX_SPEED)
-
-    command = ["wvdialconf", "/dev/null"]
-
     try:
-        output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode()
+        output = subprocess.check_output(['/usr/bin/wvdialconf', '/dev/null'], stderr=subprocess.STDOUT).decode()
+    except FileNotFoundError:
+        raise Exception('wvdialconf is not present on your system. Please install "wvdial" and try again.')
+    except subprocess.CalledProcessError:
+        raise Exception('wvdialconf failed, is your modem attached?')
 
-        lines = output.split("\n")
+    lines = output.split("\n")
 
-        for line in lines:
-            match = re.match("(.+)\<Info\>\:\sSpeed\s(\d+);", line.strip())
-            if match:
-                device = match.group(1)
-                speed = int(match.group(2))
-                logger.info("Detected device {} with speed {}".format(device, speed))
+    for line in lines:
+        match = re.match(r'(.+)<Info>:\sSpeed\s(\d+);', line.strip())
+        if match:
+            device = match.group(1)
+            speed = int(match.group(2))
+            logger.info(f'Detected device {device} with speed {speed}')
 
-                # Many modems report speeds higher than they can handle so we cap
-                # to 56k
-                return device, min(speed, MAX_SPEED)
-        else:
-            logger.info("No device detected")
+            # Many modems report speeds higher than they can handle, so we cap to 56k
+            return device, min(speed, 57600)
 
-    except:
-        logger.exception("Unable to detect modem. Falling back to ttyACM0")
-    return ("ttyACM0", MAX_SPEED)
+    raise Exception('No modem detected')
 
 
 class Modem(object):

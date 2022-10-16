@@ -15,11 +15,11 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger('notdreamnorpi')
 
-print('notdreamnorpi'
-      'https://github.com/samicrusader/notdreamnorpi'
-      'Fork of Kazade\'s original DreamPi:',
-      'https://github.com/Kazade/dreampi'
-      '--')
+print('notdreamnorpi\n'
+      'https://github.com/samicrusader/notdreamnorpi\n'
+      'Fork of Kazade\'s original DreamPi:\n',
+      'https://github.com/Kazade/dreampi\n'
+      '--\n')
 
 
 def find_next_unused_ip(start, end: int = 1):
@@ -96,25 +96,27 @@ def detect_device_and_speed():
     logging.info('Detecting available modems...')
     ports = serial.tools.list_ports.comports()
     for port, _, _ in sorted(ports):
-        logging.debug(f'Using device {port}')
         for speed in [57600, 38400, 19200, 9600, 4800, 2400]:
+            logging.debug(f'Trying device {port} at {speed}...')
             m = Modem(port, speed, False)
             m.connect()
-            m._serial.write(b'ATQ0 V1 E1\r\n')
+            m._serial.write(b'AT\r\n')
             time.sleep(1)
-            if m._serial.readline().strip().split(b'ATQ0 V1 E1')[-1] == 'OK':
-                logging.info(f'Using {port} at speed {speed}')
+            if m._serial.readline().strip() == b'AT':
+                logging.info(f'Using {port} at speed {speed}\n\n\n\n')
+                m.disconnect()
                 return port, speed
+            m.disconnect()
     raise Exception('No usable modem was found. Is it attached?')
 
 
 class Modem(object):
-    def __init__(self, device, speed, send_dial_tone=True):
+    def __init__(self, device, speed, disable_dial_tone=True):
         self._device, self._speed = device, speed
         self._serial = None
         self._sending_tone = False
 
-        if send_dial_tone:
+        if not disable_dial_tone:
             self._dial_tone_wav = self._read_dial_tone()
         else:
             self._dial_tone_wav = None
@@ -209,7 +211,6 @@ class Modem(object):
                 continue
 
             line = line + new_data
-            print(line)
             for resp in valid_responses:
                 if resp == b'CONNECT' and command == 'AT+VTX':
                     logger.info('Modem is listening.')
@@ -285,14 +286,14 @@ def main():
 
         time.sleep(5)
 
-    modem = Modem(device_and_speed[0], device_and_speed[1], args.enable_dial_tone)
+    modem = Modem(device_and_speed[0], device_and_speed[1], args.disable_dial_tone)
     cmdline, client_ip = autoconfigure_ppp(modem.device_name, modem.device_speed, args.enable_pap_auth,
                                            args.enable_pppd_debug)
 
     mode = 'LISTENING'
 
     modem.connect()
-    if args.enable_dial_tone:
+    if not args.disable_dial_tone:
         modem.start_dial_tone()
 
     time_digit_heard = datetime.now()
@@ -300,49 +301,54 @@ def main():
     while True:
         now = datetime.now()
 
-        if mode == 'LISTENING':
-            modem.update()
-            char = modem._serial.read(1).strip()
-            if not char:
-                continue
+        try:
+            if mode == 'LISTENING':
+                modem.update()
+                char = modem._serial.read(1).strip()
+                if not char:
+                    continue
 
-            if ord(char) == 16:
-                # DLE character
-                try:
-                    char = modem._serial.read(1)
-                    digit = int(char)
-                    logger.info(f'Heard: {digit}')
+                if ord(char) == 16:
+                    # DLE character
+                    try:
+                        char = modem._serial.read(1)
+                        digit = int(char)
+                        logger.info(f'Heard: {digit}')
 
-                    mode = 'ANSWERING'
-                    modem.stop_dial_tone()
-                    time_digit_heard = now
-                except (TypeError, ValueError):
-                    pass
-        elif mode == 'ANSWERING':
-            if (now - time_digit_heard).total_seconds() > 8.0:
-                time_digit_heard = None
-                modem.reset()
-                modem.send_command('ATA', ignore_responses=['OK'])
-                time.sleep(5)
-                logger.info('Call was answered.')
-                mode = 'CONNECTED'
-        elif mode == 'CONNECTED':
-            modem.disconnect()
-            pppd = subprocess.Popen(cmdline.split(' '), stderr=sys.stderr)
-            try:
-                pppd.wait()
-            except KeyboardInterrupt:
-                pppd.send_signal(9)  # SIGKILL
-                time.sleep(1)
-                modem.reset()
+                        mode = 'ANSWERING'
+                        modem.stop_dial_tone()
+                        time_digit_heard = now
+                    except (TypeError, ValueError):
+                        pass
+            elif mode == 'ANSWERING':
+                if (now - time_digit_heard).total_seconds() > 8.0:
+                    time_digit_heard = None
+                    modem.reset()
+                    modem.send_command('ATA', ignore_responses=['OK'])
+                    time.sleep(5)
+                    logger.info('Call was answered.')
+                    mode = 'CONNECTED'
+            elif mode == 'CONNECTED':
                 modem.disconnect()
-                quit(0)
-            print('return code:', str(pppd.returncode))
-            mode = 'LISTENING'
-            modem.connect()
+                pppd = subprocess.Popen(cmdline.split(' '), stderr=sys.stderr)
+                try:
+                    pppd.wait()
+                except KeyboardInterrupt:
+                    pppd.send_signal(9)  # SIGKILL
+                    time.sleep(1)
+                    raise KeyboardInterrupt
+                print('return code:', str(pppd.returncode))
+                mode = 'LISTENING'
+                modem.connect()
+                modem.reset()
+                if not args.disable_dial_tone:
+                    modem.start_dial_tone()
+        except KeyboardInterrupt:
+            modem.send_escape()
             modem.reset()
-            if args.enable_dial_tone:
-                modem.start_dial_tone()
+            if mode == 'LISTENING':
+                print('Your modem is currently awaiting a connection. You will need to replug your modem.')
+            exit(0)
     return 0
 
 
@@ -352,7 +358,7 @@ if __name__ == '__main__':
         description='notdreamnorpi: hacky pppd wrapper for the masses',
         prog='python3 dreampi.py'
     )
-    parser.add_argument('--disable-dial-tone', '-d', action='store_true', default=True,
+    parser.add_argument('--disable-dial-tone', '-d', action='store_true', default=False,
                         help='Disable simulated dial tone (default enabled)')
     parser.add_argument('--enable-pap-auth', '-a', action='store_true', default=False,
                         help='Enable PAP auth in pppd (default off)')

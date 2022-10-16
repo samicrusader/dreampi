@@ -15,8 +15,11 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger('notdreamnorpi')
 
-print('notdreamnorpi\nhttps://github.com/samicrusader/notdreamnorpi\nFork of Kazade\'s original DreamPi:',
-      'https://github.com/Kazade/dreampi\n--')
+print('notdreamnorpi'
+      'https://github.com/samicrusader/notdreamnorpi'
+      'Fork of Kazade\'s original DreamPi:',
+      'https://github.com/Kazade/dreampi'
+      '--')
 
 
 def find_next_unused_ip(start, end: int = 1):
@@ -37,13 +40,13 @@ def find_next_unused_ip(start, end: int = 1):
     current_check = parts[-1] - 1
 
     logger.debug('Finding an unused IP address...')
-    output = subprocess.check_output(["arp", "-a", "-i", interface]).decode()
+    output = subprocess.check_output(['arp', '-a', '-i', interface]).decode()
 
     addresses = tuple()
 
     for i in range(end):
         while True:
-            test_ip = ".".join([str(x) for x in parts[:3] + [current_check]])
+            test_ip = '.'.join([str(x) for x in parts[:3] + [current_check]])
             current_check -= 1
             if test_ip not in addresses and (f'({test_ip})' not in output or f'({test_ip}) at <incomplete>' in output):
                 logger.debug(f'Returning IP address: {test_ip}')
@@ -68,10 +71,10 @@ def autoconfigure_ppp(device, speed, pap_auth: bool, pppd_debug: bool):
        Returns the IP allocated to the client.
     """
 
-    gateway_ip = subprocess.check_output("route -n | grep 'UG[ \t]' | awk '{print $2}'", shell=True).decode()
-    subnet = gateway_ip.split(".")[:3]
+    gateway_ip = subprocess.check_output('route -n | grep \'UG[ \t]\' | awk \'{print $2}\'', shell=True).decode()
+    subnet = gateway_ip.split('.')[:3]
 
-    host_ip, client_ip = find_next_unused_ip(".".join(subnet) + ".100", 2)
+    host_ip, client_ip = find_next_unused_ip('.'.join(subnet) + '.100', 2)
     logger.info(f'Using host IP address: {host_ip}')
     logger.info(f'Using client IP address: {client_ip}')
 
@@ -132,7 +135,7 @@ class Modem(object):
         this_dir = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
         dial_tone_wav = os.path.join(this_dir, 'dial-tone.wav')
 
-        with open(dial_tone_wav, "rb") as f:
+        with open(dial_tone_wav, 'rb') as f:
             dial_tone = f.read()  # Read the entire wav file
             dial_tone = dial_tone[44:]  # Strip the header (44 bytes)
 
@@ -142,34 +145,32 @@ class Modem(object):
         if self._serial:
             self.disconnect()
 
-        logger.info("Opening serial interface to {}".format(self._device))
+        logger.info(f'Opening serial interface to {self._device}')
         self._serial = serial.Serial(self._device, self._speed, timeout=0)
 
     def disconnect(self):
         if self._serial and self._serial.isOpen():
             self._serial.close()
             self._serial = None
-            logger.info("Serial interface terminated")
+            logger.info('Serial interface terminated')
 
     def reset(self):
-        self.send_command("ATZ0")  # Send reset command
-        self.send_command("ATE0")  # Don't echo our responses
+        self.send_command('ATZ0')  # Send reset command
+        self.send_command('ATE0')  # Don't echo our responses
 
     def start_dial_tone(self):
         if not self._dial_tone_wav:
             return
 
         self.reset()
-        self.send_command("AT+FCLASS=8")  # Enter voice mode
-        self.send_command("AT+VLS=1")  # Go off-hook
-        self.send_command("AT+VSM=1,8000")  # 8 bit unsigned PCM
-        self.send_command("AT+VTX")  # Voice transmission mode
+        self.send_command('AT+FCLASS=8')  # Enter voice mode
+        self.send_command('AT+VLS=1')  # Go off-hook
+        self.send_command('AT+VSM=1,8000')  # 8 bit unsigned PCM
+        self.send_command('AT+VTX')  # Voice transmission mode
 
         self._sending_tone = True
 
-        self._time_since_last_dial_tone = (
-                datetime.now() - timedelta(seconds=100)
-        )
+        self._time_since_last_dial_tone = (datetime.now() - timedelta(seconds=100))
 
         self._dial_tone_counter = 0
 
@@ -177,24 +178,24 @@ class Modem(object):
         if not self._sending_tone:
             return
 
-        self._serial.write(("\0{}{}\r\n".format(chr(0x10), chr(0x03))).encode())
+        self._serial.write(b'\0\x10\x03\r\n')
         self.send_escape()
-        self.send_command("ATH0")  # Go on-hook
+        self.send_command('ATH0')  # Go on-hook
         self.reset()  # Reset the modem
         self._sending_tone = False
 
     def send_command(self, command, timeout=60, ignore_responses=None):
         ignore_responses = ignore_responses or []  # Things to completely ignore
 
-        VALID_RESPONSES = [b"OK", b"ERROR", b"CONNECT", b"VCON"]
+        valid_responses = [b'OK', b'ERROR', b'CONNECT', b'VCON']
 
         for ignore in ignore_responses:
             try:
-                VALID_RESPONSES.remove(ignore.encode())
+                valid_responses.remove(ignore.encode())
             except ValueError:
                 pass
 
-        final_command = "%s\r\n" % command
+        final_command = f'{command}\r\n'
         self._serial.write(final_command.encode())
         logger.debug(f'Sending {final_command.strip()} to the modem')
 
@@ -209,7 +210,7 @@ class Modem(object):
 
             line = line + new_data
             print(line)
-            for resp in VALID_RESPONSES:
+            for resp in valid_responses:
                 if resp == b'CONNECT' and command == 'AT+VTX':
                     logger.info('Modem is listening.')
                 if resp in line:
@@ -217,11 +218,11 @@ class Modem(object):
                     return  # We are done
 
             if (datetime.now() - start).total_seconds() > timeout:
-                raise IOError("There was a timeout while waiting for a response from the modem")
+                raise IOError('There was a timeout while waiting for a response from the modem')
 
     def send_escape(self):
         time.sleep(1.0)
-        self._serial.write(b"+++")
+        self._serial.write(b'+++')
         time.sleep(1.0)
 
     def update(self):
@@ -248,13 +249,11 @@ class GracefulKiller(object):
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
     def exit_gracefully(self, signum, _):
-        logging.warning("Received signal: %s", signum)
+        logging.warning(f'Received signal: {signum}')
         self.kill_now = True
 
 
 def main():
-    # killer = GracefulKiller()
-
     # Make sure pppd isn't running
     logging.info('Killing pppd if running...')
     for proc in psutil.process_iter():

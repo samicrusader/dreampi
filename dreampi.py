@@ -311,7 +311,7 @@ def main():
                 try:
                     char = modem._serial.read(1)
                     digit = int(char)
-                    logger.info('Heard: %s', digit)
+                    logger.info(f'Heard: {digit}')
 
                     mode = 'ANSWERING'
                     modem.stop_dial_tone()

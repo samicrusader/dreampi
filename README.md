@@ -19,7 +19,7 @@ A daemon that creates a bridge between a Dreamcast's Dial-up Modem, and the Inte
   * Other distributions should consult their package manager's repositories. pip should only really be used if packages aren't available for your distribution.
 * Clone this repository, `cd` into the folder, and run `python3 dreampi.py` as root.
   * You can call the script with `--help` to get a list of options. 
-  * If your device has trouble with the dial tone simulation, append `--disable-dial-tone=False` to the command line.
+  * If your device has trouble with the dial tone simulation, append `--disable-dial-tone` to the command line.
   * If you have PAP authentication setup for pppd (required for old WebTV classic clients in flashrom mode), append `--enable-pap-auth` to the command line if you'd like to use it.
   * If you want more advanced logging from pppd, append `--enable-pppd-debug` to the command line.
 

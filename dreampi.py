@@ -352,9 +352,10 @@ if __name__ == '__main__':
         description='notdreamnorpi: hacky pppd wrapper for the masses',
         prog='python3 dreampi.py'
     )
-    parser.add_argument('--enable-dial-tone', '-d', default=True, help='Enable simulated dial tone (default on)')
-    parser.add_argument('--enable-pap-auth', '-a', action='store_true',
-                        default=False, help='Enable PAP auth in pppd (default off)')
+    parser.add_argument('--disable-dial-tone', '-d', action='store_true', default=True,
+                        help='Disable simulated dial tone (default enabled)')
+    parser.add_argument('--enable-pap-auth', '-a', action='store_true', default=False,
+                        help='Enable PAP auth in pppd (default off)')
     parser.add_argument('--enable-pppd-debug', action='store_true', default=False,
                         help='Enable pppd debug messages (sent to stdout)')
     parser.add_argument('--verbose', '-v', action='count', default=2,

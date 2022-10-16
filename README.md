@@ -12,7 +12,7 @@ A daemon that creates a bridge between a Dreamcast's Dial-up Modem, and the Inte
 
 * You need a Linux distribution to use this script. Windows will not work unless someone has a scriptable PPP implementation.
 * Preferrably a Conexant RD02-D400 modem. Any modem will work however, as long as it is recognizable by both the Linux kernel that you are running, and wvdial.
-* Install Python 3.6+ (including `pip`), `ppp`, `wvdial` and `net-tools` from your system's package manager.
+* Install Python 3.6+ (including `pip`), `ppp`, and `net-tools` from your system's package manager.
 * Install these python packages: `psutil`, `pyserial`, `sh`.
   * Arch Linux users should install `python-psutil`, `python-pyserial`, and `python-sh`
   * Debian users should install `python3-psutil`, `python3-serial`, and `python3-sh`

@@ -2,6 +2,7 @@
 
 import argparse
 import serial
+import serial.tools.list_ports
 import os
 import logging
 import logging.handlers
@@ -9,7 +10,6 @@ import sys
 import time
 import subprocess
 import signal
-import re
 import psutil
 from datetime import datetime, timedelta
 
@@ -90,26 +90,19 @@ def autoconfigure_ppp(device, speed, pap_auth: bool, pppd_debug: bool):
 
 
 def detect_device_and_speed():
-    try:
-        output = subprocess.check_output(['/usr/bin/wvdialconf', '/dev/null'], stderr=subprocess.STDOUT).decode()
-    except FileNotFoundError:
-        raise Exception('wvdialconf is not present on your system. Please install "wvdial" and try again.')
-    except subprocess.CalledProcessError:
-        raise Exception('wvdialconf failed, is your modem attached?')
-
-    lines = output.split("\n")
-
-    for line in lines:
-        match = re.match(r'(.+)<Info>:\sSpeed\s(\d+);', line.strip())
-        if match:
-            device = match.group(1)
-            speed = int(match.group(2))
-            logger.info(f'Detected device {device} with speed {speed}')
-
-            # Many modems report speeds higher than they can handle, so we cap to 56k
-            return device, min(speed, 57600)
-
-    raise Exception('No modem detected')
+    logging.info('Detecting available modems...')
+    ports = serial.tools.list_ports.comports()
+    for port, _, _ in sorted(ports):
+        logging.debug(f'Using device {port}')
+        for speed in [57600, 38400, 19200, 9600, 4800, 2400]:
+            m = Modem(port, speed, False)
+            m.connect()
+            m._serial.write(b'ATQ0 V1 E1\r\n')
+            time.sleep(1)
+            if m._serial.readline().strip().split(b'ATQ0 V1 E1')[-1] == 'OK':
+                logging.info(f'Using {port} at speed {speed}')
+                return port, speed
+    raise Exception('No usable modem was found. Is it attached?')
 
 
 class Modem(object):
@@ -150,9 +143,7 @@ class Modem(object):
             self.disconnect()
 
         logger.info("Opening serial interface to {}".format(self._device))
-        self._serial = serial.Serial(
-            "/dev/{}".format(self._device), self._speed, timeout=0
-        )
+        self._serial = serial.Serial(self._device, self._speed, timeout=0)
 
     def disconnect(self):
         if self._serial and self._serial.isOpen():
@@ -217,6 +208,7 @@ class Modem(object):
                 continue
 
             line = line + new_data
+            print(line)
             for resp in VALID_RESPONSES:
                 if resp == b'CONNECT' and command == 'AT+VTX':
                     logger.info('Modem is listening.')
@@ -261,7 +253,7 @@ class GracefulKiller(object):
 
 
 def main():
-    killer = GracefulKiller()
+    # killer = GracefulKiller()
 
     # Make sure pppd isn't running
     logging.info('Killing pppd if running...')
@@ -307,9 +299,6 @@ def main():
     time_digit_heard = datetime.now()
 
     while True:
-        if killer.kill_now:
-            break
-
         now = datetime.now()
 
         if mode == 'LISTENING':
@@ -345,6 +334,9 @@ def main():
                 pppd.wait()
             except KeyboardInterrupt:
                 pppd.send_signal(9)  # SIGKILL
+                time.sleep(1)
+                modem.reset()
+                modem.disconnect()
                 quit(0)
             print('return code:', str(pppd.returncode))
             mode = 'LISTENING'
@@ -370,6 +362,7 @@ if __name__ == '__main__':
                         help='Increase verbosity (use like -vv, max level is around 3)')
 
     args = parser.parse_args()
-    logger.setLevel(args.verbose * 10)  # FIXME: Log levels are not right
+    # logger.setLevel(args.verbose * 10)  # FIXME: Log levels are not right
+    logger.setLevel(logging.DEBUG)
 
     quit(main())

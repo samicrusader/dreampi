@@ -79,7 +79,7 @@ def autoconfigure_ppp(device, speed, pap_auth: bool, pppd_debug: bool):
     logger.info(f'Using client IP address: {client_ip}')
 
     # Using quad9.net for DNS. This will be a user changeable option in the future.
-    cmdline = f'/usr/sbin/pppd /dev/{device} {speed} {host_ip}:{client_ip} nodetach ms-dns 9.9.9.9 proxyarp ktune noccp'
+    cmdline = f'/usr/sbin/pppd {device} {speed} {host_ip}:{client_ip} nodetach ms-dns 9.9.9.9 proxyarp ktune noccp'
 
     if pppd_debug:
         cmdline += ' logfile /dev/stderr debug'

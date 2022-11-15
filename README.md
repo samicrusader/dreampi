@@ -1,5 +1,3 @@
-# This project is abandoned, feel free to fork.
-
 # notdreamnorpi
 
 Hacky `pppd` wrapper for the masses.
